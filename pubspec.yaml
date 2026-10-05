@@ -1,0 +1,22 @@
+name: eid
+description: >-
+  Talks to electronic identity cards over any transport: APDUs, ISO 7816-4
+  file reading, card insertion and the values national cards share.
+version: 0.1.0
+homepage: https://packages.comapps.be/#eid
+repository: https://github.com/raphrmx/eid
+issue_tracker: https://github.com/raphrmx/eid/issues
+funding:
+  - https://www.paypal.com/donate/?hosted_button_id=ZN6D382YQAV5N
+topics:
+  - eid
+  - smartcard
+  - apdu
+  - identity
+
+environment:
+  sdk: ^3.3.0
+
+dev_dependencies:
+  lint: ^2.8.0
+  test: ^1.25.7
