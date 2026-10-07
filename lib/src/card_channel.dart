@@ -50,6 +50,13 @@ final class CardChannel {
     return ResponseApdu.of(data.takeBytes(), response.statusWord);
   }
 
+  /// Runs [action] with no other command reaching the card until it ends,
+  /// when [transport] is a [SharedCardTransport]; otherwise just runs it.
+  Future<T> exclusive<T>(Future<T> Function() action) => switch (transport) {
+        final SharedCardTransport shared => shared.exclusive(action),
+        _ => action(),
+      };
+
   /// Sends [command] and returns its data.
   ///
   /// Throws a [CardException] named [name] unless the status is 0x9000.

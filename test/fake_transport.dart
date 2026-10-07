@@ -30,16 +30,36 @@ final class OneFileCard implements CardTransport {
   final Uint8List content;
   int reads = 0;
 
+  /// The READ BINARY B1 commands received.
+  int oddReads = 0;
+
   @override
   Future<Uint8List> transmit(Uint8List command) async {
     reads++;
-    final offset = command[2] << 8 | command[3];
-    final le = command[4] == 0 ? 256 : command[4];
+    final apdu = CommandApdu.parse(command);
+    final odd = apdu.ins == 0xB1;
+    if (odd) oddReads++;
+    // B1 carries the offset in tag 54 and wraps the answer in tag 53.
+    final offset = odd
+        ? apdu.data.skip(2).fold(0, (value, byte) => value << 8 | byte)
+        : apdu.p1 << 8 | apdu.p2;
+    final le = apdu.le!;
     if (offset >= content.length) return bytes('6B00');
     final left = content.length - offset;
-    if (le > left) return Uint8List.fromList([0x6C, left]);
+    if (!odd) {
+      if (le > left) return Uint8List.fromList([0x6C, left]);
+      return Uint8List.fromList([
+        ...content.sublist(offset, offset + le),
+        0x90,
+        0x00,
+      ]);
+    }
+    final count = left < le - 3 ? left : le - 3;
     return Uint8List.fromList([
-      ...content.sublist(offset, offset + le),
+      0x53,
+      if (count >= 0x80) 0x81,
+      count,
+      ...content.sublist(offset, offset + count),
       0x90,
       0x00,
     ]);

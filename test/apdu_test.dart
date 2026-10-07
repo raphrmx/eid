@@ -39,12 +39,63 @@ void main() {
       expect(CommandApdu(0, 0xB0, 0, 0, le: 256).toString(), '00B0000000');
     });
 
-    test('refuses what a short APDU cannot carry', () {
+    test('writes extended length when data or Le need it', () {
+      final long = List.filled(300, 0xAB);
+      expect(CommandApdu(0, 0xB0, 0, 0, le: 257).toString(), '00B00000000101');
+      expect(
+        CommandApdu(0, 0xB0, 0, 0, le: 0x10000).toString(),
+        '00B00000000000',
+      );
+      final withData = CommandApdu(0, 0x86, 0, 0, data: long, le: 256);
+      expect(withData.isExtended, isTrue);
+      expect(withData.toString(), '0086000000012C${'AB' * 300}0100');
+      expect(CommandApdu(0, 0x86, 0, 0, data: long).toBytes().length, 307);
+      expect(
+        CommandApdu(0, 0x24, 0, 1, data: long).toString(),
+        '0024000100012C (redacted)',
+      );
+    });
+
+    test('parses what it writes, in all four cases, short and extended', () {
+      final commands = [
+        CommandApdu(0x80, 0xE6, 0, 0),
+        CommandApdu(0, 0xB0, 1, 2, le: 256),
+        CommandApdu(0, 0xA4, 2, 0x0C, data: [0x40, 0x31]),
+        CommandApdu(0, 0x88, 2, 0x81, data: [1, 2], le: 128),
+        CommandApdu(0, 0xB0, 0, 0, le: 0x10000),
+        CommandApdu(0x0C, 0xB0, 0, 0, data: List.filled(256, 1)),
+        CommandApdu(0, 0x86, 0, 0, data: List.filled(300, 2), le: 0x10000),
+        CommandApdu(0, 0x86, 0, 0, data: [3], le: 1000),
+      ];
+      for (final command in commands) {
+        final parsed = CommandApdu.parse(command.toBytes());
+        expect(parsed.toBytes(), command.toBytes());
+        expect(parsed.data, command.data);
+        expect(parsed.le, command.le);
+      }
+    });
+
+    test('refuses bytes that are no command', () {
+      for (final hex in [
+        '00B000',
+        '00B000000000',
+        '00A4020C034031',
+        '0086000000000301',
+      ]) {
+        expect(
+          () => CommandApdu.parse(bytes(hex)),
+          throwsFormatException,
+          reason: hex,
+        );
+      }
+    });
+
+    test('refuses what an APDU cannot carry', () {
       expect(() => CommandApdu(0x100, 0, 0, 0), throwsRangeError);
       expect(() => CommandApdu(0, 0, 0, 0, le: 0), throwsRangeError);
-      expect(() => CommandApdu(0, 0, 0, 0, le: 257), throwsRangeError);
+      expect(() => CommandApdu(0, 0, 0, 0, le: 0x10001), throwsRangeError);
       expect(
-        () => CommandApdu(0, 0, 0, 0, data: List.filled(256, 0)),
+        () => CommandApdu(0, 0, 0, 0, data: List.filled(0x10000, 0)),
         throwsRangeError,
       );
     });

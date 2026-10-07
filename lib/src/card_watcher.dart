@@ -27,8 +27,9 @@ final class CardRemoved extends CardEvent {
 /// Watches a [CardTerminal] and reports cards going in and out.
 ///
 /// Polls every [interval], sending [presenceProbe] while a card is in and no
-/// command is under way. Stop the watcher before a signature that must
-/// directly follow a PIN check.
+/// command is under way. Commands that must follow one another, such as a
+/// signature right after a PIN check or a secure messaging session, go in
+/// `CardChannel.exclusive`.
 final class CardWatcher {
   /// A watcher of [terminal], checking every [interval] once started.
   CardWatcher(
@@ -161,20 +162,22 @@ final class CardWatcher {
 }
 
 /// A card connection that keeps the presence probe out of the app's commands.
-final class _WatchedConnection implements CardConnection {
+final class _WatchedConnection implements CardConnection, SharedCardTransport {
   _WatchedConnection(this._connection, this._quiet);
 
   final CardConnection _connection;
   final Duration _quiet;
   int _inFlight = 0;
+  int _held = 0;
   bool _released = false;
   // A timer rather than a stopwatch, so that a test's fake clock drives it.
   Timer? _settling;
   Future<void>? _probing;
 
-  /// Whether a command is in flight or one ended less than the quiet time
-  /// ago.
-  bool get isBusy => _inFlight > 0 || (_settling?.isActive ?? false);
+  /// Whether a command is in flight, an exclusive run is under way, or
+  /// either ended less than the quiet time ago.
+  bool get isBusy =>
+      _inFlight > 0 || _held > 0 || (_settling?.isActive ?? false);
 
   /// Sends [CardWatcher.presenceProbe] and returns whether the card answered.
   Future<bool> probe() async {
@@ -200,9 +203,26 @@ final class _WatchedConnection implements CardConnection {
       return await _connection.transmit(command);
     } finally {
       _inFlight--;
-      _settling?.cancel();
-      if (!_released) _settling = Timer(_quiet, () {});
+      _settle();
     }
+  }
+
+  @override
+  Future<T> exclusive<T>(Future<T> Function() action) async {
+    _held++;
+    try {
+      final probing = _probing;
+      if (probing != null) await probing;
+      return await action();
+    } finally {
+      _held--;
+      _settle();
+    }
+  }
+
+  void _settle() {
+    _settling?.cancel();
+    if (!_released) _settling = Timer(_quiet, () {});
   }
 
   @override

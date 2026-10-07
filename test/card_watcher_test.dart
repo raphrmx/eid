@@ -198,6 +198,28 @@ void main() {
       await watcher.dispose();
     });
 
+    test('stays out of an exclusive run, pauses included', () async {
+      final terminal = FakeTerminal()..cardIn = true;
+      final watcher = CardWatcher(terminal, interval: interval)..start();
+      final inserted = await watcher.events.first as CardInserted;
+      final channel = CardChannel(inserted.connection);
+
+      final before = terminal.probes;
+      final result = await channel.exclusive(() async {
+        await channel.send(CommandApdu(0, 0xB0, 0, 0, le: 1));
+        // Longer than the quiet time, as a key agreement may take.
+        await Future<void>.delayed(interval * 4);
+        await channel.send(CommandApdu(0, 0xB0, 0, 0, le: 1));
+        return 42;
+      });
+      expect(result, 42);
+      expect(terminal.probes, before);
+
+      await Future<void>.delayed(interval * 4);
+      expect(terminal.probes, greaterThan(before), reason: 'probes resume');
+      await watcher.dispose();
+    });
+
     test('holds a command sent during the probe until the probe ends',
         () async {
       final terminal = FakeTerminal()..cardIn = true;

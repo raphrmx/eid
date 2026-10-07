@@ -10,7 +10,7 @@ typedef ApduListener = void Function(ApduExchange exchange);
 /// One command sent to a card and its answer, as reported by a `CardChannel`.
 ///
 /// PIN and PUK data is never reported: such a [command] is cut after its
-/// header and [isRedacted] is true.
+/// header and length field, and [isRedacted] is true.
 final class ApduExchange {
   /// An exchange of [command] for [response], or [failure] if it failed.
   ApduExchange({
@@ -21,7 +21,9 @@ final class ApduExchange {
     CardTransportException? failure,
   }) : this._(
           command,
-          isRedacted: command.length > 5 && isSecretInstruction(command[1]),
+          dataStart: command.length > 5 && isSecretInstruction(command[1])
+              ? _dataStart(command)
+              : null,
           time: time,
           duration: duration,
           response: response,
@@ -30,13 +32,21 @@ final class ApduExchange {
 
   ApduExchange._(
     Uint8List command, {
-    required this.isRedacted,
+    required int? dataStart,
     required this.time,
     required this.duration,
     this.response,
     this.failure,
-  }) : command =
-            isRedacted ? Uint8List.fromList(command.sublist(0, 5)) : command;
+  })  : isRedacted = dataStart != null,
+        command = dataStart == null
+            ? command
+            : Uint8List.fromList(command.sublist(0, dataStart));
+
+  // Where the data of [command] starts, or null when it carries none.
+  static int? _dataStart(Uint8List command) {
+    if (command[4] != 0) return 5;
+    return command.length > 7 ? 7 : null;
+  }
 
   /// The command as sent, or only its header when [isRedacted].
   final Uint8List command;

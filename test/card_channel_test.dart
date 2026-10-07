@@ -106,6 +106,37 @@ void main() {
       );
     });
 
+    test('reads past 32767 with READ BINARY B1', () async {
+      final content =
+          Uint8List.fromList(List.generate(33000, (i) => i * 7 & 0xFF));
+      final card = OneFileCard(content);
+      expect(await CardChannel(card).readTransparentFile(), content);
+      // 133 blocks of 248 reach 32984; one B1 block brings the rest.
+      expect(card.oddReads, 1);
+    });
+
+    test('reads one block past 32767, the offset in tag 54', () async {
+      final transport = ScriptedTransport(['5303AABBCC9000']);
+      final data =
+          await CardChannel(transport).readBinary(offset: 0x12345, length: 3);
+      expect(data, [0xAA, 0xBB, 0xCC]);
+      expect(transport.sent, ['00B1000005540301234505']);
+    });
+
+    test('refuses a B1 answer without tag 53', () async {
+      final channel = CardChannel(ScriptedTransport(['AABB9000']));
+      await expectLater(
+        channel.readBinary(offset: 0x8000, length: 2),
+        throwsFormatException,
+      );
+    });
+
+    test('runs an exclusive action directly over an unshared transport',
+        () async {
+      final channel = CardChannel(ScriptedTransport([]));
+      expect(await channel.exclusive(() async => 'done'), 'done');
+    });
+
     test('reports a file it may not read', () async {
       final channel = CardChannel(ScriptedTransport(['6982']));
       await expectLater(
@@ -135,6 +166,16 @@ void main() {
       expect(exchanges.last.statusWord, 0x9000);
       expect(exchanges.last.responseDataLength, 2);
       expect(exchanges.last.toString(), '>> 00C0000002  << AABB9000');
+    });
+
+    test('leaves the PIN out of an extended command', () async {
+      final exchanges = <ApduExchange>[];
+      final transport = ScriptedTransport(['9000']);
+      await CardChannel(transport, onApdu: exchanges.add).send(
+        CommandApdu(0, 0x24, 0, 1, data: List.filled(300, 0x31)),
+      );
+      expect(hexString(exchanges.single.command), '0024000100012C');
+      expect(exchanges.single.isRedacted, isTrue);
     });
 
     test('leaves the PIN out', () async {

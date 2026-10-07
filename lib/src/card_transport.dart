@@ -11,6 +11,16 @@ abstract interface class CardTransport {
   Future<Uint8List> transmit(Uint8List command);
 }
 
+/// A transport something else also sends commands over, such as the
+/// presence probe of a `CardWatcher`.
+abstract interface class SharedCardTransport implements CardTransport {
+  /// Runs [action] with no other command reaching the card until it ends.
+  ///
+  /// For commands that must follow one another, such as a secure messaging
+  /// session, which a stray command would end.
+  Future<T> exclusive<T>(Future<T> Function() action);
+}
+
 /// The card could not be reached: no reader, no card, or a lost connection.
 ///
 /// An error status from the card is a `CardException` instead.

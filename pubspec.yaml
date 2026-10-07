@@ -2,7 +2,7 @@ name: eid
 description: >-
   Talks to electronic identity cards over any transport: APDUs, ISO 7816-4
   file reading, card insertion and the values national cards share.
-version: 0.1.0
+version: 0.1.1
 homepage: https://packages.comapps.be/#eid
 repository: https://github.com/raphrmx/eid
 issue_tracker: https://github.com/raphrmx/eid/issues
@@ -13,6 +13,9 @@ topics:
   - smartcard
   - apdu
   - identity
+screenshots:
+  - description: Which packages to add for a Belgian card or a passport, the key each needs and what the read gives back.
+    path: screenshots/situations.png
 
 environment:
   sdk: ^3.3.0
